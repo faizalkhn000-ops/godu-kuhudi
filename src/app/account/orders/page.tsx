@@ -5,10 +5,9 @@ import { Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/utils';
 import { ORDER_STATUS_LABELS } from '@/lib/constants';
-import type { Order } from '@/types/database';
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -16,7 +15,14 @@ export default function OrdersPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from('orders').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+      
+      // Fetch orders WITH their items to get the image_url
+      const { data } = await supabase
+        .from('orders')
+        .select('*, items:order_items(*)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+        
       setOrders(data || []);
       setIsLoading(false);
     };
@@ -37,22 +43,34 @@ export default function OrdersPage() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {orders.map(order => (
-            <Link key={order.id} href={`/account/orders/${order.id}`} style={{
-              display: 'grid', gridTemplateColumns: '1fr auto auto', alignItems: 'center', gap: 'var(--space-6)',
-              padding: 'var(--space-5) var(--space-6)', background: 'var(--color-white)', borderRadius: 'var(--radius-lg)',
-              textDecoration: 'none', border: '1px solid var(--color-gray-100)', transition: 'box-shadow 0.2s'
-            }}>
-              <div>
-                <p style={{ fontWeight: 600, color: 'var(--color-gray-800)', marginBottom: '4px' }}>Order #{order.order_number}</p>
-                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-400)' }}>{formatDate(order.created_at)}</p>
-              </div>
-              <span className={`badge badge-${order.status === 'delivered' ? 'success' : order.status === 'cancelled' ? 'error' : 'purple'}`}>
-                {ORDER_STATUS_LABELS[order.status] || order.status}
-              </span>
-              <p style={{ fontWeight: 600, color: 'var(--color-deep-plum)' }}>{formatPrice(Number(order.total))}</p>
-            </Link>
-          ))}
+          {orders.map(order => {
+            const firstItemImage = order.items?.[0]?.image_url;
+            return (
+              <Link key={order.id} href={`/account/orders/${order.id}`} style={{
+                display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', alignItems: 'center', gap: 'var(--space-6)',
+                padding: 'var(--space-5) var(--space-6)', background: 'var(--color-white)', borderRadius: 'var(--radius-lg)',
+                textDecoration: 'none', border: '1px solid var(--color-gray-100)', transition: 'box-shadow 0.2s'
+              }}>
+                <div style={{ width: '60px', height: '60px', borderRadius: '4px', overflow: 'hidden', background: 'var(--color-gray-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {firstItemImage ? (
+                    <img src={firstItemImage} alt="Order item" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <Package size={24} color="var(--color-gray-400)" />
+                  )}
+                </div>
+                <div>
+                  <p style={{ fontWeight: 600, color: 'var(--color-gray-800)', marginBottom: '4px' }}>Order #{order.order_number}</p>
+                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-400)' }}>
+                    {formatDate(order.created_at)} &bull; {order.items?.length || 0} item{order.items?.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <span className={`badge badge-${order.status === 'delivered' ? 'success' : order.status === 'cancelled' ? 'error' : 'purple'}`}>
+                  {ORDER_STATUS_LABELS[order.status] || order.status}
+                </span>
+                <p style={{ fontWeight: 600, color: 'var(--color-deep-plum)' }}>{formatPrice(Number(order.total))}</p>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
